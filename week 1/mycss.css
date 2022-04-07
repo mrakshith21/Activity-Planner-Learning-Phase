@@ -1,0 +1,38 @@
+.myfooter {
+    position: relative;  
+left: 0px;  
+bottom: 0px;  
+right: 10px;   
+width: 100%;  
+height: 50px;
+color: black;  
+text-align: center;  
+border-style: solid;
+border-bottom: 10px;
+border-right: 10px;
+border-left: 10px;
+border-color: black;
+}
+
+ul a:hover{
+    background-color: grey;
+}
+
+.navborder {
+    border-radius: 10px;
+    border-style: solid;
+    border-color: black;
+}
+
+.heading {
+    top:0px;
+}
+
+.acmsguru {
+    border-right:3px;
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-color:black;
+    border-style: solid;
+}
