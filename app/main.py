@@ -1,5 +1,6 @@
 import argparse
 import os
+import subprocess
 import sys
 
 from openai import OpenAI
@@ -7,6 +8,7 @@ import json
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
+
 
 def read(file_path):
     if file_path != None and os.path.exists(file_path):
@@ -16,10 +18,16 @@ def read(file_path):
     else:
         return f"File {file_path} does not exist"
 
+
 def write(file_path, contents):
     with open(file_path, "w") as f:
         f.write(contents)
     return f"Wrote to file {file_path}"
+
+
+def bash(command):
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    return f"Output: \n {result.stdout}\n\n Error: {result.stderr}"
 
 def main():
     p = argparse.ArgumentParser()
@@ -37,16 +45,16 @@ def main():
             "name": "Read",
             "description": "Read and return the contents of a file",
             "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                "type": "string",
-                "description": "The path to the file to read"
-                }
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "The path to the file to read",
+                    }
+                },
+                "required": ["file_path"],
             },
-            "required": ["file_path"]
-            }
-        }
+        },
     }
     WRITE = {
         "type": "function",
@@ -54,31 +62,46 @@ def main():
             "name": "Write",
             "description": "Write content to a file",
             "parameters": {
-            "type": "object",
-            "required": ["file_path", "content"],
-            "properties": {
-                "file_path": {
-                "type": "string",
-                "description": "The path of the file to write to"
+                "type": "object",
+                "required": ["file_path", "content"],
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "The path of the file to write to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The content to write to the file",
+                    },
                 },
-                "content": {
-                "type": "string",
-                "description": "The content to write to the file"
-                }
-            }
-            }
-        }
-        }
-    
+            },
+        },
+    }
+    BASH = {
+        "type": "function",
+        "function": {
+            "name": "Bash",
+            "description": "Execute a shell command",
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to execute",
+                    }
+                },
+            },
+        },
+    }
+
     messages = [{"role": "user", "content": args.p}]
 
-    while(True):
-        
+    while True:
+
         print(f"Sending request to model {messages}", file=sys.stderr)
         chat = client.chat.completions.create(
-            model="anthropic/claude-haiku-4.5",
-            messages=messages,
-            tools=[READ, WRITE]
+            model="anthropic/claude-haiku-4.5", messages=messages, tools=[READ, WRITE, BASH]
         )
 
         if not chat.choices or len(chat.choices) == 0:
@@ -95,23 +118,38 @@ def main():
                     function = tool_call.function
                     if function.name == "Read":
                         arguments = json.loads(function.arguments)
-                        file_path =  arguments["file_path"]
+                        file_path = arguments["file_path"]
                         result = read(file_path)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": result
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": result,
+                            }
+                        )
                     if function.name == "Write":
                         arguments = json.loads(function.arguments)
-                        file_path =  arguments["file_path"]
+                        file_path = arguments["file_path"]
                         contents = arguments["content"]
                         result = write(file_path, contents)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": result
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": result,
+                            }
+                        )
+                    if function.name == "Bash":
+                        arguments = json.loads(function.arguments)
+                        command = arguments["command"]
+                        result = bash(command)
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": result,
+                            }
+                        )
         else:
             print(chat.choices[0].message.content)
             break
