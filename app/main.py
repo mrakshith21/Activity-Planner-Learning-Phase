@@ -3,6 +3,7 @@ import os
 import sys
 
 from openai import OpenAI
+import json
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
@@ -48,8 +49,20 @@ def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    # TODO: Uncomment the following line to pass the first stage
-    print(chat.choices[0].message.content)
+    message = chat.choices[0].message
+    if message.tool_calls != None:
+        tool_call = message.tool_calls[0]
+        if tool_call.type == "function":
+            function = tool_call.function
+            if function.name == "Read":
+                arguments = json.loads(function.arguments)
+                file_path =  arguments["file_path"]
+                if file_path != None and os.path.exists(file_path):
+                    with open(file_path, "r") as f:
+                        file_contents = f.read()
+                    print(file_contents)
+    else:
+        print(chat.choices[0].message.content)
 
 
 if __name__ == "__main__":
