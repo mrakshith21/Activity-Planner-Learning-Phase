@@ -8,6 +8,18 @@ import json
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
 
+def read(file_path):
+    if file_path != None and os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            file_contents = f.read()
+            return file_contents
+    else:
+        return f"File {file_path} does not exist"
+
+def write(file_path, contents):
+    with open(file_path, "w") as f:
+        f.write(contents)
+    return f"Wrote to file {file_path}"
 
 def main():
     p = argparse.ArgumentParser()
@@ -36,6 +48,27 @@ def main():
             }
         }
     }
+    WRITE = {
+        "type": "function",
+        "function": {
+            "name": "Write",
+            "description": "Write content to a file",
+            "parameters": {
+            "type": "object",
+            "required": ["file_path", "content"],
+            "properties": {
+                "file_path": {
+                "type": "string",
+                "description": "The path of the file to write to"
+                },
+                "content": {
+                "type": "string",
+                "description": "The content to write to the file"
+                }
+            }
+            }
+        }
+        }
     
     messages = [{"role": "user", "content": args.p}]
 
@@ -45,7 +78,7 @@ def main():
         chat = client.chat.completions.create(
             model="anthropic/claude-haiku-4.5",
             messages=messages,
-            tools=[READ]
+            tools=[READ, WRITE]
         )
 
         if not chat.choices or len(chat.choices) == 0:
@@ -57,22 +90,28 @@ def main():
         message = chat.choices[0].message
         messages.append(message)
         if message.tool_calls != None:
-            print(f"{len(message.tool_calls)} tool calls in response", file=sys.stderr)
             for tool_call in message.tool_calls:
                 if tool_call.type == "function":
                     function = tool_call.function
                     if function.name == "Read":
                         arguments = json.loads(function.arguments)
                         file_path =  arguments["file_path"]
-                        if file_path != None and os.path.exists(file_path):
-                            with open(file_path, "r") as f:
-                                file_contents = f.read()
-                                messages.append({
-                                    "role": "tool",
-                                    "tool_call_id": tool_call.id,
-                                    "content": file_contents
-                                })
-                                print(f"Executed Read tool call: result = {file_contents}", file=sys.stderr)
+                        result = read(file_path)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result
+                        })
+                    if function.name == "Write":
+                        arguments = json.loads(function.arguments)
+                        file_path =  arguments["file_path"]
+                        contents = arguments["content"]
+                        result = write(file_path, contents)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result
+                        })
         else:
             print(chat.choices[0].message.content)
             break
